@@ -7,90 +7,136 @@
 
 ## Installations
 * Docker: https://docs.docker.com/docker-for-mac/install/
-* Virtual Box if you don't already have it: `brew install --cask virtualbox`
+* [For Intel Chipset Only] Virtual Box: `brew install --cask virtualbox`
+* [For Intel Chipset Only] Kubernetes cli tools: `brew install kubernetes-cli`
 * Minikube: `brew install minikube`
-* Kubernetes cli tools: `brew install kubernetes-cli`
 * Helm: `brew install helm`
+* TODO: AWS cli, Creating ECR repository, AWS Access Key
 
-## Setup Minikube cluster
+## Setup Minikube cluster with docker registry
 ```
 minikube config set disk-size 20GB
 minikube config set memory 6144
 minikube delete
 minikube start
-```
 
-## Setup Local Docker Registry
-```
-docker run -d -p 5000:5000 --restart always --name registry registry:2
-
-# Edit the /etc/docker/daemon.json to have the following line
-
-{ "insecure-registries": ["localhost:5000"] }
+eval $(minikube -p minikube docker-env)
+docker run -d -p 5123:5000 --name local-registry registry:2
 ```
 
 ## Building
 ```
-# CMS Build 
-    # (No need)
+#!/bin/bash
 
-# user service
-    cd user
-    ./gradlew clean build
-    docker rmi $(docker images -qa 'localhost:5000/com.cypher-user')
-    docker build --no-cache -t localhost:5000/com.cypher-user:latest --build-arg SERVICE=user .
-    docker push localhost:5000/com.cypher-user:latest
+# Set environment variables
+eval $(minikube -p minikube docker-env)
+export REGISTRY=localhost:5123
+export NAMESPACE=apps-template
+export VERSION=latest
 
-cd ..
+# Build and push custom-jres image
+echo "Building and pushing custom-jres image..."
+(
+    cd custom-jres/custom-jre-20 || exit
+    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
+)
 
-# api service
-    cd api
-    ./gradlew clean build
-    docker rmi $(docker images -qa 'localhost:5000/com.cypher-api')
-    docker build --no-cache -t localhost:5000/com.cypher-api:latest --build-arg SERVICE=api .
-    docker push localhost:5000/com.cypher-api:latest
-    
-# web service
-    cd web
-    #TBA
-    docker rmi $(docker images -qa 'localhost:5000/com.cypher-web')
-    docker build --no-cache -t localhost:5000/com.cypher-web:latest --build-arg SERVICE=web .
-    docker push localhost:5000/com.cypher-web:latest
+# Build and push user image
+echo "Building and pushing user image..."
+(
+    cd user || exit
+    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
+)
 
-# native
-    #NA
+echo "Script completed successfully."
 ```
 
 ## Deployment
 ```
-# Define Namespace
-    export NAMESPACE=cypher
+#!/bin/bash
 
-# Install/Upgrade CMS (Wordpress)
-    helm upgrade cms oci://registry-1.docker.io/bitnamicharts/wordpress -n $NAMESPACE
+# Set environment variables
+export REGISTRY=localhost:5123
+export NAMESPACE=apps-template
+export VERSION=latest
 
-# Install/Upgrade user service
-    cd user
-    helm upgrade user -n $NAMESPACE
-    
-cd ..
+# Upgrade and install Helm charts
+helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
+    -n "$NAMESPACE"
 
-# Install/Upgrade api service
-    cd api
-    helm upgrade api -n $NAMESPACE
-    
-cd ..
-
-# Install/Upgrade web service
-    cd web
-    helm upgrade web -n $NAMESPACE
-
-cd ..
-
-# Install/Upgrade native
-    #N/A
-
+(cd user && \
+    helm upgrade --install --create-namespace user infrastructure/helm \
+    -f infrastructure/helm/values.yaml \
+    --set image.repository="$REGISTRY/$NAMESPACE-user" \
+    --set image.tag="$VERSION" \
+    --set 'imagePullSecrets=' \
+    --set app.db.local="true" \
+    --set app.db.host="user-db" \
+    --set app.db.password="password" \
+    --namespace "$NAMESPACE")
 ```
 
 # Production Deployment
-* Github Actions (TBA)
+## TODO
+* GitHub Actions (TBA)
+* EKS, ECR Repositories (TBA)
+
+## Building
+```
+#!/bin/bash
+
+# Set environment variables
+export REGISTRY=881387567440.dkr.ecr.us-east-1.amazonaws.com
+export NAMESPACE=apps-template
+export VERSION=latest
+export REGION=us-east-1
+
+# Log in to Docker registry
+echo "Logging in to Docker registry..."
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+
+# Build and push custom-jres image
+echo "Building and pushing custom-jres image..."
+(
+    cd custom-jres/custom-jre-20 || exit
+    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
+)
+
+# Build and push user image
+echo "Building and pushing user image..."
+(
+    cd user || exit
+    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
+)
+
+echo "Script completed successfully."
+```
+
+## Deployment
+```
+#!/bin/bash
+
+# Set environment variables
+export REGISTRY=881387567440.dkr.ecr.us-east-1.amazonaws.com
+export NAMESPACE=apps-template
+export VERSION=latest
+export REGION=us-east-1
+
+# Delete and recreate Kubernetes secret for ECR image pull
+kubectl delete secret regcred --namespace="$NAMESPACE"
+kubectl create secret docker-registry regcred \
+    --docker-server="$REGISTRY" \
+    --docker-username=AWS \
+    --docker-password="$(aws ecr get-login-password --region "$REGION")" \
+    --docker-email=sachin@joincypher.com \
+    --namespace="$NAMESPACE"
+
+# Upgrade and install Helm charts
+helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
+    -n "$NAMESPACE"
+
+(cd user && \
+    helm upgrade --install --create-namespace user infrastructure/helm \
+    -f infrastructure/helm/values.yaml \
+    --namespace "$NAMESPACE")
+```
