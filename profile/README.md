@@ -138,5 +138,11 @@ helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnami
 (cd user && \
     helm upgrade --install --create-namespace user infrastructure/helm \
     -f infrastructure/helm/values.yaml \
+    --set image.repository="$REGISTRY/$NAMESPACE-user" \
+    --set image.tag="$VERSION" \
+    --set 'imagePullSecrets[0].name=regcred' \
+    --set app.db.local="false" \
+    --set app.db.host="RDS Host TBA" \
+    --set app.db.password="RDS DB Password TBA" \
     --namespace "$NAMESPACE")
 ```
