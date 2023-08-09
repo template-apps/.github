@@ -11,6 +11,7 @@
 * [For Intel Chipset Only] Kubernetes cli tools: `brew install kubernetes-cli`
 * Minikube: `brew install minikube`
 * Helm: `brew install helm`
+* Java 20
 * TODO: AWS cli, Creating ECR repository, AWS Access Key
 
 ## Setup Minikube cluster with docker registry
