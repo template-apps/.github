@@ -80,7 +80,7 @@ helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnami
 # Production Deployment
 ## TODO
 * GitHub Actions (TBA)
-* EKS, ECR Repositories (TBA)
+* EKS, EKS Role, ECR Repositories (TBA)
 
 ## Building
 ```
