@@ -49,8 +49,7 @@ jobs:
 
       - name: Create EKS cluster
         run: |
-          #!/bin/bash
-          CLUSTER_EXISTS=$(eksctl get cluster --region ${{env.REGION}} --name ${{env.CLUSTER}} --output json 2>/dev/null)
+          export CLUSTER_EXISTS=$(eksctl get cluster --region ${{env.REGION}} --name ${{env.CLUSTER}} --output json 2>/dev/null)
           if [ -z "$CLUSTER_EXISTS" ]; then
             echo "Cluster does not exist. Creating cluster..."
             eksctl create cluster --name ${{env.CLUSTER}} --region ${{env.REGION}}
@@ -58,7 +57,7 @@ jobs:
           else
             echo "Cluster already exists. Skipping cluster creation."
           fi
-          NODEGROUP_EXISTS=$(eksctl get nodegroup --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name ng-${{env.NAMESPACE}} --output json 2>/dev/null)
+          export NODEGROUP_EXISTS=$(eksctl get nodegroup --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name ng-${{env.NAMESPACE}} --output json 2>/dev/null)
           if [ -z "$NODEGROUP_EXISTS" ]; then
             echo "Nodegroup does not exist. Creating nodegroup..."
             eksctl create nodegroup --cluster ${{env.CLUSTER}} --region ${{env.REGION}} --name ng-${{env.NAMESPACE}} --node-type ${{env.NODE_TYPE}} --nodes-min ${{env.NODES_MIN}} --nodes-max ${{env.NODES_MAX}}
