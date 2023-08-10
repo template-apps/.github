@@ -1,0 +1,41 @@
+name: Continuous Deployment
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+env:
+  CLUSTER: briklabs-eks-cluster
+  REGION: us-east-1
+
+jobs:
+  create-cluster:
+    name: Create EKS Cluster
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: '0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{env.REGION}}
+
+      - name: Create cluster using eksctl
+        uses: robatwave/github-action-eksctl@v0.1.2
+        run: |
+          # Good article https://sysdig.com/learn-cloud-native/kubernetes-security/aws-eks-with-and-without-fargate-understanding-the-differences/          
+          eksctl create cluster --name ${{env.CLUSTER}} --region ${{env.REGION}} --fargate
+
