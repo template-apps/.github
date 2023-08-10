@@ -9,6 +9,7 @@ on:
 env:
   CLUSTER: briklabs-eks-cluster
   REGION: us-east-1
+  NAMESPACE: apps-template
 
 jobs:
   create-cluster:
@@ -45,6 +46,22 @@ jobs:
 
       - name: Create EKS cluster
         run: |
-          # Good article https://sysdig.com/learn-cloud-native/kubernetes-security/aws-eks-with-and-without-fargate-understanding-the-differences/          
-          eksctl create cluster --name ${{env.CLUSTER}} --region ${{env.REGION}} --fargate
+          #!/bin/bash
 
+          CLUSTER_EXISTS=$(eksctl get cluster --region ${{env.REGION}} --name ${{env.CLUSTER}} --output json 2>/dev/null)
+          if [ -z "$CLUSTER_EXISTS" ]; then
+            echo "Cluster does not exist. Creating cluster..."
+            eksctl create cluster --name ${{env.CLUSTER}} --region ${{env.REGION}} --fargate
+            echo "Cluster created successfully."
+          else
+            echo "Cluster already exists. Skipping cluster creation."
+          fi
+          
+          FARGATE_PROFILE_EXISTS=$(eksctl get fargateprofile --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name fp-${{env.NAMESPACE}} --output json 2>/dev/null)
+          if [ -z "$FARGATE_PROFILE_EXISTS" ]; then
+            eksctl create fargateprofile --namespace ${{env.NAMESPACE}} --cluster ${{env.CLUSTER}} --name fp-${{env.NAMESPACE}}
+            echo "Fargate profile created successfully."
+          else
+            echo "Fargate profile already exists. Skipping profile creation."
+          fi
+          
