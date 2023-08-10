@@ -33,8 +33,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{env.REGION}}
 
-      - name: Create cluster using eksctl
+      - name: Install eksctl
         uses: robatwave/github-action-eksctl@v0.1.2
+
+      - name: Create EKS cluster
         run: |
           # Good article https://sysdig.com/learn-cloud-native/kubernetes-security/aws-eks-with-and-without-fargate-understanding-the-differences/          
           eksctl create cluster --name ${{env.CLUSTER}} --region ${{env.REGION}} --fargate
