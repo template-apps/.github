@@ -34,7 +34,14 @@ jobs:
           aws-region: ${{env.REGION}}
 
       - name: Install eksctl
-        uses: robatwave/github-action-eksctl@0.1.2
+        uses: statsig-io/kubectl-via-eksctl@main
+        env:
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: ${{env.REGION}}
+          cluster: ${{env.CLUSTER}}
+        with:
+          args: get pods
 
       - name: Create EKS cluster
         run: |
