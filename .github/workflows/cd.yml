@@ -34,7 +34,7 @@ jobs:
           aws-region: ${{env.REGION}}
 
       - name: Install eksctl
-        uses: robatwave/github-action-eksctl@v0.1.2
+        uses: robatwave/github-action-eksctl@0.1.2
 
       - name: Create EKS cluster
         run: |
