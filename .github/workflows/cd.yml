@@ -57,22 +57,23 @@ jobs:
           sudo mv /tmp/eksctl /usr/local/bin
 
       - name: Create EKS Cluster
-        if: ${{ github.event.inputs.shouldCreateCluster }}
         run: |
-           eksctl create cluster -f <(echo '
-             apiVersion: eksctl.io/v1alpha5
-             kind: ClusterConfig
-
-             metadata:
-               name: ${{env.CLUSTER}}
-               region: ${{env.REGION}}
-
-             fargateProfiles:
-               - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
-                 selectors:
-                   - namespace: ${{env.NAMESPACE}}
-                   - namespace: kube-system
-           ')
+          if [ "${{ github.event.inputs.shouldCreateCluster }}" = "true" ]; then
+            eksctl create cluster -f <(echo '
+               apiVersion: eksctl.io/v1alpha5
+               kind: ClusterConfig
+  
+               metadata:
+                 name: ${{env.CLUSTER}}
+                 region: ${{env.REGION}}
+  
+               fargateProfiles:
+                 - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
+                   selectors:
+                     - namespace: ${{env.NAMESPACE}}
+                     - namespace: kube-system
+             ')
+          fi
 
       - name: Create EFS & Dependencies
         if: ${{ github.event.inputs.shouldCreateEFS }}
