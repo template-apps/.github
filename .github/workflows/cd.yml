@@ -1,4 +1,4 @@
-name: Create Global Infrastructure
+name: Create Global Infrastructure (Manual Workflow)
 
 on:
   pull_request:
@@ -25,7 +25,7 @@ env:
 
 jobs:
   create-global-infrastructure:
-    name: Create Global Infrastructure
+    name: Create Global Infrastructure (Manual Workflow)
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
@@ -57,7 +57,7 @@ jobs:
           sudo mv /tmp/eksctl /usr/local/bin
 
       - name: Create EKS Cluster
-        if: github.event.inputs.shouldCreateCluster == true
+        if: ${{ inputs.shouldCreateCluster }}
         run: |
            eksctl create cluster -f <(echo '
              apiVersion: eksctl.io/v1alpha5
@@ -75,7 +75,7 @@ jobs:
            ')
 
       - name: Create EFS & Dependencies
-        if: github.event.inputs.shouldCreateEFS == true
+        if: ${{ inputs.shouldCreateEFS }}
         run: |
           eksctl utils write-kubeconfig --cluster ${{env.CLUSTER}} --region ${{env.REGION}}
           
@@ -202,7 +202,7 @@ jobs:
           echo "Persistent Volume for EFS created"
 
       - name: Create ALB
-        if: github.event.inputs.shouldCreateALB == true
+        if: ${{ inputs.shouldCreateALB }}
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
           VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
