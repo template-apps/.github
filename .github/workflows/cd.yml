@@ -44,19 +44,151 @@ jobs:
           tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
           sudo mv /tmp/eksctl /usr/local/bin
 
-      - name: Create EKS cluster
+#      - name: Create EKS cluster
+#        run: |
+#          eksctl create cluster -f <(echo '
+#            apiVersion: eksctl.io/v1alpha5
+#            kind: ClusterConfig
+#
+#            metadata:
+#              name: ${{env.CLUSTER}}
+#              region: ${{env.REGION}}
+#
+#            fargateProfiles:
+#              - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
+#                selectors:
+#                  - namespace: ${{env.NAMESPACE}}
+#                  - namespace: kube-system
+#              ')
+
+      - name: Create EFS volume
         run: |
-          eksctl create cluster -f <(echo '
-            apiVersion: eksctl.io/v1alpha5
-            kind: ClusterConfig
-            
+          VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
+          CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{env.REGION}} --output text)
+          # EFS File System
+          EFS_FS_ID=$(aws efs create-file-system \
+            --creation-token efs-${{env.CLUSTER}} \
+            --encrypted \
+            --performance-mode generalPurpose \
+            --throughput-mode bursting \
+            --tags Key=Name,Value=vol-${{env.CLUSTER}} \
+            --region ${{env.REGION}} \
+            --output text \
+            --query "FileSystemId")
+          # EFS Access Point
+          EFS_AP=$(aws efs create-access-point \
+            --file-system-id $EFS_FS_ID \
+            --posix-user Uid=1000,Gid=1000 \
+            --root-directory "Path=/bitnami,CreationInfo={OwnerUid=1000,OwnerGid=1000,Permissions=777}" \
+            --region ${{env.REGION}} \
+            --query 'AccessPointId' \
+            --output text)
+          # Security Group for File System for Inbound traffic
+          EFS_SG_ID=$(aws ec2 create-security-group \
+            --description "Security Group for File System for Inbound traffic" \
+            --group-name sg-efs-${{env.CLUSTER}} \
+            --vpc-id $VPC_ID \
+            --region ${{env.REGION}} \
+            --query 'GroupId' --output text)
+          aws ec2 authorize-security-group-ingress \
+            --group-id $EFS_SG_ID \
+            --protocol tcp \
+            --port 2049 \
+            --cidr $CIDR_BLOCK
+          # Create EFS mount targets for the volume in all subnets used in the Fargate profile
+          for subnet in $(aws eks describe-fargate-profile \
+            --output text --cluster-name ${{env.CLUSTER}} \
+            --fargate-profile-name fp-${{env.CLUSTER}}-${{env.NAMESPACE}}  \
+            --region ${{env.REGION}}  \
+            --query "fargateProfile.subnets"); \
+          do (aws efs create-mount-target \
+            --file-system-id $EFS_FS_ID \
+            --subnet-id $subnet \
+            --security-group $EFS_SG_ID \
+            --region ${{env.REGION}}); \
+          done
+          # Create Persistent Volume for EFS
+          echo "
+            apiVersion: storage.k8s.io/v1beta1
+            kind: CSIDriver
             metadata:
-              name: ${{env.CLUSTER}}
-              region: ${{env.REGION}}
-            
-            fargateProfiles:
-              - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
-                selectors:
-                  - namespace: ${{env.NAMESPACE}}
-                  - namespace: kube-system
-              ')
+              name: efs.csi.aws.com
+            spec:
+              attachRequired: false
+            ---
+            kind: StorageClass
+            apiVersion: storage.k8s.io/v1
+            metadata:
+              name: efs-sc
+            provisioner: efs.csi.aws.com
+            ---
+            apiVersion: v1
+            kind: PersistentVolume
+            metadata:
+              name: efs-pv-${{env.CLUSTER}}
+            spec:
+              capacity:
+                storage: 100Gi
+              volumeMode: Filesystem
+              accessModes:
+                - ReadWriteMany
+              persistentVolumeReclaimPolicy: Retain
+              storageClassName: efs-sc
+              csi:
+                driver: efs.csi.aws.com
+                volumeHandle: $EFS_FS_ID::$EFS_AP
+            ---
+            apiVersion: v1
+            kind: PersistentVolumeClaim
+            metadata:
+              name: efs-pvc-${{env.CLUSTER}}
+            spec:
+              accessModes:
+                - ReadWriteMany
+              storageClassName: efs-sc
+              resources:
+                requests:
+                  storage: 25Gi
+          " | kubectl apply -f -
+
+      - name: Create ALB
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
+          VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
+          ## Associate OIDC provider
+          eksctl utils associate-iam-oidc-provider \
+            --region ${{env.REGION}} \
+            --cluster ${{env.CLUSTER}} \
+            --approve
+          ## Download the IAM policy document
+          curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v2_ga/docs/install/iam_policy.json -o iam-policy.json
+          ## Create an IAM policy
+          aws iam create-policy \
+            --policy-name AWSLoadBalancerControllerIAMPolicy \
+            --policy-document file://iam-policy.json
+          ## Create a service account
+          eksctl create iamserviceaccount \
+            --cluster=${{env.CLUSTER}} \
+            --region ${{env.REGION}} \
+            --namespace=kube-system \
+            --name=aws-load-balancer-controller \
+            --override-existing-serviceaccounts \
+            --attach-policy-arn=arn:aws:iam::$ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
+            --approve
+          ## The AWS Load Balancer Controller uses cert-manager
+          eksctl create fargateprofile \
+            --cluster ${{env.CLUSTER}} \
+            --name cert-manager \
+            --namespace cert-manager \
+            --region $WOF_REGION
+          ## Install AWS Load Balancer Controller
+          helm repo add eks https://aws.github.io/eks-charts
+          kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
+          helm install aws-load-balancer-controller \
+            eks/aws-load-balancer-controller \
+            --namespace kube-system \
+            --set clusterName=${{env.CLUSTER}} \
+            --set serviceAccount.create=false \
+            --set serviceAccount.name=aws-load-balancer-controller \
+            --set vpcId=$VPC_ID \
+            --set region=${{env.REGION}}
