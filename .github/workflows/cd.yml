@@ -1,11 +1,6 @@
 name: Create Global Infrastructure (Manual Workflow)
 
 on:
-  pull_request:
-    types:
-      - closed
-    branches:
-      - main
   workflow_dispatch:
     branches:
       - main
@@ -28,7 +23,6 @@ env:
 jobs:
   create-global-infrastructure:
     name: Create Global Infrastructure (Manual Workflow)
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -37,9 +31,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
-          fetch-depth: '0'
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
