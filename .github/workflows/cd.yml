@@ -32,7 +32,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{env.REGION}}
+          aws-region: ${{vars.REGION}}
 
       - name: Install eksctl
         run: |
@@ -52,32 +52,32 @@ jobs:
              kind: ClusterConfig
 
              metadata:
-               name: ${{env.CLUSTER}}
-               region: ${{env.REGION}}
+               name: ${{vars.CLUSTER}}
+               region: ${{vars.REGION}}
 
              fargateProfiles:
-               - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
+               - name: fp-${{vars.CLUSTER}}-${{vars.NAMESPACE}}
                  selectors:
-                   - namespace: ${{env.NAMESPACE}}
+                   - namespace: ${{vars.NAMESPACE}}
                    - namespace: kube-system
            ')
 
       - name: Create EFS & Dependencies
         if: inputs.shouldCreateEFS
         run: |
-          eksctl utils write-kubeconfig --cluster ${{env.CLUSTER}} --region ${{env.REGION}}
+          eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
           
-          VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
-          CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{env.REGION}} --output text)
+          VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
+          CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{vars.REGION}} --output text)
           
           # EFS File System
           EFS_FS_ID=$(aws efs create-file-system \
-            --creation-token efs-${{env.CLUSTER}} \
+            --creation-token efs-${{vars.CLUSTER}} \
             --encrypted \
             --performance-mode generalPurpose \
             --throughput-mode bursting \
-            --tags Key=Name,Value=efs-${{env.CLUSTER}} \
-            --region ${{env.REGION}} \
+            --tags Key=Name,Value=efs-${{vars.CLUSTER}} \
+            --region ${{vars.REGION}} \
             --output text \
             --query "FileSystemId")
           
@@ -104,9 +104,9 @@ jobs:
           # Security Group for File System for Inbound traffic
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
-            --group-name eks-efs-${{env.CLUSTER}} \
+            --group-name eks-efs-${{vars.CLUSTER}} \
             --vpc-id $VPC_ID \
-            --region ${{env.REGION}} \
+            --region ${{vars.REGION}} \
             --query 'GroupId' --output text)
           
           aws ec2 authorize-security-group-ingress \
@@ -119,15 +119,15 @@ jobs:
           
           # Create EFS mount targets for the volume in all subnets used in the Fargate profile
           for subnet in $(aws eks describe-fargate-profile \
-            --output text --cluster-name ${{env.CLUSTER}} \
-            --fargate-profile-name fp-${{env.CLUSTER}}-${{env.NAMESPACE}}  \
-            --region ${{env.REGION}}  \
+            --output text --cluster-name ${{vars.CLUSTER}} \
+            --fargate-profile-name fp-${{vars.CLUSTER}}-${{vars.NAMESPACE}}  \
+            --region ${{vars.REGION}}  \
             --query "fargateProfile.subnets"); \
           do (aws efs create-mount-target \
             --file-system-id $EFS_FS_ID \
             --subnet-id $subnet \
             --security-group $EFS_SG_ID \
-            --region ${{env.REGION}}); \
+            --region ${{vars.REGION}}); \
           done
           
           echo "EFS mount targets done"
@@ -136,12 +136,12 @@ jobs:
         if: inputs.shouldCreateALB
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
-          VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
+          VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
           
           ## Associate OIDC provider
           eksctl utils associate-iam-oidc-provider \
-            --region ${{env.REGION}} \
-            --cluster ${{env.CLUSTER}} \
+            --region ${{vars.REGION}} \
+            --cluster ${{vars.CLUSTER}} \
             --approve
           
           ## Download the IAM policy document
@@ -154,8 +154,8 @@ jobs:
           
           ## Create a service account
           eksctl create iamserviceaccount \
-            --cluster=${{env.CLUSTER}} \
-            --region ${{env.REGION}} \
+            --cluster=${{vars.CLUSTER}} \
+            --region ${{vars.REGION}} \
             --namespace=kube-system \
             --name=aws-load-balancer-controller \
             --override-existing-serviceaccounts \
@@ -164,7 +164,7 @@ jobs:
           
           ## The AWS Load Balancer Controller uses cert-manager
           eksctl create fargateprofile \
-            --cluster ${{env.CLUSTER}} \
+            --cluster ${{vars.CLUSTER}} \
             --name cert-manager \
             --namespace cert-manager \
             --region $WOF_REGION
@@ -175,8 +175,8 @@ jobs:
           helm install aws-load-balancer-controller \
             eks/aws-load-balancer-controller \
             --namespace kube-system \
-            --set clusterName=${{env.CLUSTER}} \
+            --set clusterName=${{vars.CLUSTER}} \
             --set serviceAccount.create=false \
             --set serviceAccount.name=aws-load-balancer-controller \
             --set vpcId=$VPC_ID \
-            --set region=${{env.REGION}}
+            --set region=${{vars.REGION}}
