@@ -55,7 +55,8 @@ jobs:
               region: ${{env.REGION}}
             
             fargateProfiles:
-              - name: fp-$CLUSTER-$NAMESPACE
+              - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
                 selectors:
-                  - namespace: $NAMESPACE
+                  - namespace: ${{env.NAMESPACE}}
+                  - namespace: kube-system
               ')
