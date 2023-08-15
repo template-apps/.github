@@ -86,7 +86,7 @@ jobs:
             while [ $wait_time -lt 150 ]; do
               status=$(aws efs describe-file-systems \
               --file-system-id $EFS_FS_ID \
-              --region ${REGION} \
+              --region ${{vars.REGION}} \
               --output text \
               --query "FileSystems[0].LifeCycleState")
           
@@ -167,7 +167,7 @@ jobs:
             --cluster ${{vars.CLUSTER}} \
             --name cert-manager \
             --namespace cert-manager \
-            --region $WOF_REGION
+            --region ${{vars.REGION}}
           
           ## Install AWS Load Balancer Controller
           helm repo add eks https://aws.github.io/eks-charts
