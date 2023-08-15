@@ -57,7 +57,7 @@ jobs:
           sudo mv /tmp/eksctl /usr/local/bin
 
       - name: Create EKS Cluster
-        if: ${{ inputs.shouldCreateCluster }}
+        if: ${{ github.event.inputs.shouldCreateCluster }}
         run: |
            eksctl create cluster -f <(echo '
              apiVersion: eksctl.io/v1alpha5
@@ -75,7 +75,7 @@ jobs:
            ')
 
       - name: Create EFS & Dependencies
-        if: ${{ inputs.shouldCreateEFS }}
+        if: ${{ github.event.inputs.shouldCreateEFS }}
         run: |
           eksctl utils write-kubeconfig --cluster ${{env.CLUSTER}} --region ${{env.REGION}}
           
@@ -202,7 +202,7 @@ jobs:
           echo "Persistent Volume for EFS created"
 
       - name: Create ALB
-        if: ${{ inputs.shouldCreateALB }}
+        if: ${{ github.event.inputs.shouldCreateALB }}
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
           VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
