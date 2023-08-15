@@ -10,9 +10,9 @@ env:
   CLUSTER: briklabs-eks-cluster
   REGION: us-east-1
   NAMESPACE: apps-template
-  NODE_TYPE: t2-micro
-  NODES_MIN: 1
-  NODES_MAX: 5
+#  NODE_TYPE: t2-micro
+#  NODES_MIN: 1
+#  NODES_MAX: 5
 
 jobs:
   create-cluster:
@@ -57,11 +57,18 @@ jobs:
           else
             echo "Cluster already exists. Skipping cluster creation."
           fi
-          export NODEGROUP_EXISTS=$(eksctl get nodegroup --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name ng-${{env.NAMESPACE}} --output json 2>/dev/null)
-          if [ -z "$NODEGROUP_EXISTS" ]; then
-            echo "Nodegroup does not exist. Creating nodegroup..."
-            eksctl create nodegroup --cluster ${{env.CLUSTER}} --region ${{env.REGION}} --name ng-${{env.NAMESPACE}} --node-type ${{env.NODE_TYPE}} --nodes-min ${{env.NODES_MIN}} --nodes-max ${{env.NODES_MAX}}
-            echo "Nodegroup created successfully."
-          else
-            echo "Nodegroup already exists. Skipping nodegroup creation."
-          fi          
+#          export NODEGROUP_EXISTS=$(eksctl get nodegroup --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name ng-${{env.NAMESPACE}} --output json 2>/dev/null)
+#          if [ -z "$NODEGROUP_EXISTS" ]; then
+#            echo "Nodegroup does not exist. Creating nodegroup..."
+#            eksctl create nodegroup --cluster ${{env.CLUSTER}} --region ${{env.REGION}} --name ng-${{env.NAMESPACE}} --node-type ${{env.NODE_TYPE}} --nodes-min ${{env.NODES_MIN}} --nodes-max ${{env.NODES_MAX}}
+#            echo "Nodegroup created successfully."
+#          else
+#            echo "Nodegroup already exists. Skipping nodegroup creation."
+#          fi
+           FARGATE_PROFILE_EXISTS=$(eksctl get fargateprofile --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name fp-${{env.NAMESPACE}} --output json 2>/dev/null)
+           if [ -z "$FARGATE_PROFILE_EXISTS" ]; then
+             eksctl create fargateprofile --namespace ${{env.NAMESPACE}} --cluster ${{env.CLUSTER}} --name fp-${{env.NAMESPACE}}
+            echo "Fargate profile created successfully."
+           else
+             echo "Fargate profile already exists. Skipping profile creation."
+           fi
