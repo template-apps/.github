@@ -190,6 +190,7 @@ jobs:
               resources:
                   requests:
                       storage: 25Gi
+              volumeName: efs-pv-${{env.CLUSTER}}
           " | kubectl apply -n ${{env.NAMESPACE}} -f -
 
           echo "Persistent Volume for EFS created"
