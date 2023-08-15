@@ -10,9 +10,7 @@ env:
   CLUSTER: briklabs-eks-cluster
   REGION: us-east-1
   NAMESPACE: apps-template
-  NODE_TYPE: t2-micro
-  NODES_MIN: 1
-  NODES_MAX: 5
+  SPOT_INSTANCE_TYPES: t2-micro
 
 jobs:
   create-cluster:
@@ -59,8 +57,8 @@ jobs:
           fi
           export NODEGROUP_EXISTS=$(eksctl get nodegroup --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name ng-${{env.NAMESPACE}} --output json 2>/dev/null)
           if [ -z "$NODEGROUP_EXISTS" ]; then
-            echo "Nodegroup does not exist. Creating nodegroup..."
-            eksctl create nodegroup --cluster ${{env.CLUSTER}} --region ${{env.REGION}} --name ng-${{env.NAMESPACE}} --node-type ${{env.NODE_TYPE}} --nodes-min ${{env.NODES_MIN}} --nodes-max ${{env.NODES_MAX}}
+            echo "Nodegroup does not exist. Creating managed nodegroup..."
+            eksctl create nodegroup --cluster ${{env.CLUSTER}} --region ${{env.REGION}} --name ng-${{env.NAMESPACE}} --spot --instance-types=${{env.SPOT_INSTANCE_TYPES}} 
             echo "Nodegroup created successfully."
           else
             echo "Nodegroup already exists. Skipping nodegroup creation."
