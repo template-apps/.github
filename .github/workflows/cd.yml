@@ -7,6 +7,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+    branches:
+      - main
     inputs:
       shouldCreateCluster:
         description: "Do you want to create EKS cluster?"
