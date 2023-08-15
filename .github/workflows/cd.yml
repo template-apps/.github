@@ -58,7 +58,7 @@ jobs:
 
       - name: Create EKS Cluster
         run: |
-          if [ "${{ github.event.inputs.shouldCreateCluster }}" = "true" ]; then
+          if [ "${{ inputs.shouldCreateCluster }}" = "true" ]; then
             eksctl create cluster -f <(echo '
                apiVersion: eksctl.io/v1alpha5
                kind: ClusterConfig
