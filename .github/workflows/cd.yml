@@ -65,6 +65,7 @@ jobs:
         run: |
           VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
           CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{env.REGION}} --output text)
+          
           # EFS File System
           EFS_FS_ID=$(aws efs create-file-system \
             --creation-token efs-${{env.CLUSTER}} \
@@ -75,6 +76,25 @@ jobs:
             --region ${{env.REGION}} \
             --output text \
             --query "FileSystemId")
+          
+          # Wait until EFS File System is available, with a maximum wait time of 150 seconds
+            wait_time=0
+            while [ $wait_time -lt 150 ]; do
+              status=$(aws efs describe-file-systems \
+              --file-system-id $EFS_FS_ID \
+              --region ${REGION} \
+              --output text \
+              --query "FileSystems[0].LifeCycleState")
+          
+              if [ "$status" = "available" ]; then
+                break
+              else
+                echo "Waiting for EFS File System to become available..."
+                sleep 10  # Wait for 10 seconds before checking again
+              wait_time=$((wait_time + 10))
+              fi
+            done
+          
           # EFS Access Point
           EFS_AP=$(aws efs create-access-point \
             --file-system-id $EFS_FS_ID \
@@ -83,6 +103,7 @@ jobs:
             --region ${{env.REGION}} \
             --query 'AccessPointId' \
             --output text)
+          
           # Security Group for File System for Inbound traffic
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
@@ -95,6 +116,7 @@ jobs:
             --protocol tcp \
             --port 2049 \
             --cidr $CIDR_BLOCK
+          
           # Create EFS mount targets for the volume in all subnets used in the Fargate profile
           for subnet in $(aws eks describe-fargate-profile \
             --output text --cluster-name ${{env.CLUSTER}} \
@@ -107,6 +129,7 @@ jobs:
             --security-group $EFS_SG_ID \
             --region ${{env.REGION}}); \
           done
+          
           # Create Persistent Volume for EFS
           echo "
             apiVersion: storage.k8s.io/v1beta1
