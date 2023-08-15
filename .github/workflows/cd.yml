@@ -150,46 +150,46 @@ jobs:
 
           # Create Persistent Volume for EFS
           echo "
-            apiVersion: storage.k8s.io/v1
-            kind: CSIDriver
-            metadata:
-                name: efs.csi.aws.com
-            spec:
-                attachRequired: false
-            ---
-            kind: StorageClass
-            apiVersion: storage.k8s.io/v1
-            metadata:
-                name: efs-sc
-            provisioner: efs.csi.aws.com
-            ---
-            apiVersion: v1
-            kind: PersistentVolume
-            metadata:
-                name: efs-pv-${{env.CLUSTER}}
-            spec:
-                capacity:
-                    storage: 100Gi
-                volumeMode: Filesystem
-                accessModes:
-                    - ReadWriteMany
-                persistentVolumeReclaimPolicy: Retain
-                storageClassName: efs-sc
-                csi:
-                    driver: efs.csi.aws.com
-                    volumeHandle: $EFS_FS_ID::$EFS_AP
-            ---
-            apiVersion: v1
-            kind: PersistentVolumeClaim
-            metadata:
-                name: efs-pvc-${{env.CLUSTER}}
-            spec:
-                accessModes:
-                    - ReadWriteMany
-                storageClassName: efs-sc
-                resources:
-                    requests:
-                        storage: 25Gi
+          apiVersion: storage.k8s.io/v1
+          kind: CSIDriver
+          metadata:
+              name: efs.csi.aws.com
+          spec:
+              attachRequired: false
+          ---
+          kind: StorageClass
+          apiVersion: storage.k8s.io/v1
+          metadata:
+              name: efs-sc
+          provisioner: efs.csi.aws.com
+          ---
+          apiVersion: v1
+          kind: PersistentVolume
+          metadata:
+              name: efs-pv-${{env.CLUSTER}}
+          spec:
+              capacity:
+                  storage: 100Gi
+              volumeMode: Filesystem
+              accessModes:
+                  - ReadWriteMany
+              persistentVolumeReclaimPolicy: Retain
+              storageClassName: efs-sc
+              csi:
+                  driver: efs.csi.aws.com
+                  volumeHandle: $EFS_FS_ID::$EFS_AP
+          ---
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+              name: efs-pvc-${{env.CLUSTER}}
+          spec:
+              accessModes:
+                  - ReadWriteMany
+              storageClassName: efs-sc
+              resources:
+                  requests:
+                      storage: 25Gi
           " | kubectl apply -n ${{env.NAMESPACE}} -f -
 
           echo "Persistent Volume for EFS created"
