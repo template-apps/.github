@@ -15,11 +15,6 @@ on:
         description: "Do you want to create ALB?"
         type: boolean
 
-env:
-  CLUSTER: template-apps
-  REGION: us-east-1
-  NAMESPACE: apps-template
-
 jobs:
   create-global-infrastructure:
     name: Create Global Infrastructure (Manual Workflow)
@@ -81,7 +76,7 @@ jobs:
             --encrypted \
             --performance-mode generalPurpose \
             --throughput-mode bursting \
-            --tags Key=Name,Value=vol-${{env.CLUSTER}} \
+            --tags Key=Name,Value=efs-${{env.CLUSTER}} \
             --region ${{env.REGION}} \
             --output text \
             --query "FileSystemId")
@@ -106,17 +101,6 @@ jobs:
 
           echo "EFS File System created"
 
-          # EFS Access Point
-          EFS_AP=$(aws efs create-access-point \
-            --file-system-id $EFS_FS_ID \
-            --posix-user Uid=1000,Gid=1000 \
-            --root-directory "Path=/bitnami,CreationInfo={OwnerUid=1000,OwnerGid=1000,Permissions=777}" \
-            --region ${{env.REGION}} \
-            --query 'AccessPointId' \
-            --output text)
-          
-          echo "Access point created"
-          
           # Security Group for File System for Inbound traffic
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
@@ -147,53 +131,6 @@ jobs:
           done
           
           echo "EFS mount targets done"
-
-          # Create Persistent Volume for EFS
-          echo "
-          apiVersion: storage.k8s.io/v1
-          kind: CSIDriver
-          metadata:
-              name: efs.csi.aws.com
-          spec:
-              attachRequired: false
-          ---
-          kind: StorageClass
-          apiVersion: storage.k8s.io/v1
-          metadata:
-              name: efs-sc
-          provisioner: efs.csi.aws.com
-          ---
-          apiVersion: v1
-          kind: PersistentVolume
-          metadata:
-              name: efs-pv-${{env.CLUSTER}}
-          spec:
-              capacity:
-                  storage: 100Gi
-              volumeMode: Filesystem
-              accessModes:
-                  - ReadWriteMany
-              persistentVolumeReclaimPolicy: Retain
-              storageClassName: efs-sc
-              csi:
-                  driver: efs.csi.aws.com
-                  volumeHandle: $EFS_FS_ID::$EFS_AP
-          ---
-          apiVersion: v1
-          kind: PersistentVolumeClaim
-          metadata:
-              name: efs-pvc-${{env.CLUSTER}}
-          spec:
-              accessModes:
-                  - ReadWriteMany
-              storageClassName: efs-sc
-              resources:
-                  requests:
-                      storage: 25Gi
-              volumeName: efs-pv-${{env.CLUSTER}}
-          " | kubectl apply -n ${{env.NAMESPACE}} -f -
-
-          echo "Persistent Volume for EFS created"
 
       - name: Create ALB (External Facing)
         if: inputs.shouldCreateALB
