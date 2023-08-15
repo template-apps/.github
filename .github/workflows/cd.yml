@@ -147,7 +147,7 @@ jobs:
             --approve
           
           ## Download the IAM policy document
-          curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.5.4/docs/install/iam_policy_us-gov.json -o iam-policy.json
+          curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json -o iam-policy.json
           
           ## Create an IAM policy
           aws iam create-policy \
