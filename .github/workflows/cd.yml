@@ -60,7 +60,7 @@ jobs:
 
       - name: Create EKS Cluster
         run: |
-          if [ "${{ inputs.shouldCreateCluster }}" = "true" ]; then
+          if [ "${{ github.event.inputs.shouldCreateCluster }}" = "true" ]; then
             eksctl create cluster -f <(echo '
                apiVersion: eksctl.io/v1alpha5
                kind: ClusterConfig
@@ -78,7 +78,7 @@ jobs:
           fi
 
       - name: Create EFS & Dependencies
-        if: ${{ github.event.inputs.shouldCreateEFS }}
+        if: ${{ inputs.shouldCreateEFS }}
         run: |
           eksctl utils write-kubeconfig --cluster ${{env.CLUSTER}} --region ${{env.REGION}}
           
