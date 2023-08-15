@@ -7,10 +7,9 @@ on:
     branches:
       - main
 env:
-  CLUSTER: briklabs-eks-cluster
+  CLUSTER: template-apps
   REGION: us-east-1
   NAMESPACE: apps-template
-  SPOT_INSTANCE_TYPES: t2-micro
 
 jobs:
   create-cluster:
@@ -47,19 +46,16 @@ jobs:
 
       - name: Create EKS cluster
         run: |
-          export CLUSTER_EXISTS=$(eksctl get cluster --region ${{env.REGION}} --name ${{env.CLUSTER}} --output json 2>/dev/null)
-          if [ -z "$CLUSTER_EXISTS" ]; then
-            echo "Cluster does not exist. Creating cluster..."
-            eksctl create cluster --name ${{env.CLUSTER}} --region ${{env.REGION}}
-            echo "Cluster created successfully."
-          else
-            echo "Cluster already exists. Skipping cluster creation."
-          fi
-          export NODEGROUP_EXISTS=$(eksctl get nodegroup --region ${{env.REGION}} --cluster ${{env.CLUSTER}} --name ng-${{env.NAMESPACE}} --output json 2>/dev/null)
-          if [ -z "$NODEGROUP_EXISTS" ]; then
-            echo "Nodegroup does not exist. Creating managed nodegroup..."
-            eksctl create nodegroup --cluster ${{env.CLUSTER}} --region ${{env.REGION}} --name ng-${{env.NAMESPACE}} --spot --instance-types=${{env.SPOT_INSTANCE_TYPES}} 
-            echo "Nodegroup created successfully."
-          else
-            echo "Nodegroup already exists. Skipping nodegroup creation."
-          fi
+          eksctl create cluster -f <(echo '
+            apiVersion: eksctl.io/v1alpha5
+            kind: ClusterConfig
+            
+            metadata:
+              name: ${{env.CLUSTER}}
+              region: ${{env.REGION}}
+            
+            fargateProfiles:
+              - name: fp-$CLUSTER-$NAMESPACE
+                selectors:
+                  - namespace: $NAMESPACE
+              ')
