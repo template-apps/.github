@@ -6,13 +6,25 @@ on:
       - closed
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      shouldCreateCluster:
+        description: "Do you want to create EKS cluster?"
+        type: boolean
+      shouldCreateEFS:
+        description: "Do you want to create EFS?"
+        type: boolean
+      shouldCreateALB:
+        description: "Do you want to create EFS?"
+        type: boolean
+
 env:
   CLUSTER: template-apps
   REGION: us-east-1
   NAMESPACE: apps-template
 
 jobs:
-  create-cluster:
+  create-global-infrastructure:
     name: Create Global Infrastructure
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
@@ -44,25 +56,29 @@ jobs:
           tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
           sudo mv /tmp/eksctl /usr/local/bin
 
-      - name: Create EKS cluster
+      - name: Create EKS Cluster
+        if: github.event.inputs.shouldCreateCluster == true
         run: |
-          eksctl create cluster -f <(echo '
-            apiVersion: eksctl.io/v1alpha5
-            kind: ClusterConfig
+           eksctl create cluster -f <(echo '
+             apiVersion: eksctl.io/v1alpha5
+             kind: ClusterConfig
 
-            metadata:
-              name: ${{env.CLUSTER}}
-              region: ${{env.REGION}}
+             metadata:
+               name: ${{env.CLUSTER}}
+               region: ${{env.REGION}}
 
-            fargateProfiles:
-              - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
-                selectors:
-                  - namespace: ${{env.NAMESPACE}}
-                  - namespace: kube-system
-              ')
+             fargateProfiles:
+               - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
+                 selectors:
+                   - namespace: ${{env.NAMESPACE}}
+                   - namespace: kube-system
+           ')
 
       - name: Create EFS & Dependencies
+        if: github.event.inputs.shouldCreateEFS == true
         run: |
+          eksctl utils write-kubeconfig --cluster ${{env.CLUSTER}} --region ${{env.REGION}}
+          
           VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
           CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{env.REGION}} --output text)
           
@@ -115,6 +131,7 @@ jobs:
             --vpc-id $VPC_ID \
             --region ${{env.REGION}} \
             --query 'GroupId' --output text)
+          
           aws ec2 authorize-security-group-ingress \
             --group-id $EFS_SG_ID \
             --protocol tcp \
@@ -185,20 +202,25 @@ jobs:
           echo "Persistent Volume for EFS created"
 
       - name: Create ALB
+        if: github.event.inputs.shouldCreateALB == true
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
           VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
+          
           ## Associate OIDC provider
           eksctl utils associate-iam-oidc-provider \
             --region ${{env.REGION}} \
             --cluster ${{env.CLUSTER}} \
             --approve
+          
           ## Download the IAM policy document
           curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v2_ga/docs/install/iam_policy.json -o iam-policy.json
+          
           ## Create an IAM policy
           aws iam create-policy \
             --policy-name AWSLoadBalancerControllerIAMPolicy \
             --policy-document file://iam-policy.json
+          
           ## Create a service account
           eksctl create iamserviceaccount \
             --cluster=${{env.CLUSTER}} \
@@ -208,12 +230,14 @@ jobs:
             --override-existing-serviceaccounts \
             --attach-policy-arn=arn:aws:iam::$ACCOUNT_ID:policy/AWSLoadBalancerControllerIAMPolicy \
             --approve
+          
           ## The AWS Load Balancer Controller uses cert-manager
           eksctl create fargateprofile \
             --cluster ${{env.CLUSTER}} \
             --name cert-manager \
             --namespace cert-manager \
             --region $WOF_REGION
+          
           ## Install AWS Load Balancer Controller
           helm repo add eks https://aws.github.io/eks-charts
           kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
