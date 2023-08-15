@@ -107,7 +107,7 @@ jobs:
           # Security Group for File System for Inbound traffic
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
-            --group-name sg-efs-${{env.CLUSTER}} \
+            --group-name SecurityGroup-efs-${{env.CLUSTER}} \
             --vpc-id $VPC_ID \
             --region ${{env.REGION}} \
             --query 'GroupId' --output text)
