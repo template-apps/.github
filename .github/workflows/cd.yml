@@ -1,4 +1,4 @@
-name: Continuous Deployment
+name: Create Global Infrastructure
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ env:
 
 jobs:
   create-cluster:
-    name: Create EKS Cluster
+    name: Create Global Infrastructure
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
@@ -44,24 +44,24 @@ jobs:
           tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
           sudo mv /tmp/eksctl /usr/local/bin
 
-#      - name: Create EKS cluster
-#        run: |
-#          eksctl create cluster -f <(echo '
-#            apiVersion: eksctl.io/v1alpha5
-#            kind: ClusterConfig
-#
-#            metadata:
-#              name: ${{env.CLUSTER}}
-#              region: ${{env.REGION}}
-#
-#            fargateProfiles:
-#              - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
-#                selectors:
-#                  - namespace: ${{env.NAMESPACE}}
-#                  - namespace: kube-system
-#              ')
+      - name: Create EKS cluster
+        run: |
+          eksctl create cluster -f <(echo '
+            apiVersion: eksctl.io/v1alpha5
+            kind: ClusterConfig
 
-      - name: Create EFS volume
+            metadata:
+              name: ${{env.CLUSTER}}
+              region: ${{env.REGION}}
+
+            fargateProfiles:
+              - name: fp-${{env.CLUSTER}}-${{env.NAMESPACE}}
+                selectors:
+                  - namespace: ${{env.NAMESPACE}}
+                  - namespace: kube-system
+              ')
+
+      - name: Create EFS & Dependencies
         run: |
           VPC_ID=$(aws eks describe-cluster --name ${{env.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{env.REGION}} --output text)
           CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{env.REGION}} --output text)
@@ -111,7 +111,7 @@ jobs:
           # Security Group for File System for Inbound traffic
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
-            --group-name SecurityGroup-efs-${{env.CLUSTER}} \
+            --group-name eks-efs-${{env.CLUSTER}} \
             --vpc-id $VPC_ID \
             --region ${{env.REGION}} \
             --query 'GroupId' --output text)
