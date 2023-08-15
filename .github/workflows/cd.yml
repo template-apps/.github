@@ -149,6 +149,8 @@ jobs:
           ## Download the IAM policy document
           curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-alb-ingress-controller/v2_ga/docs/install/iam_policy.json -o iam-policy.json
           
+          cat iam-policy.json
+          
           ## Create an IAM policy
           aws iam create-policy \
             --policy-name AWSLoadBalancerControllerIAMPolicy \
