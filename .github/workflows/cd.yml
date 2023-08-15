@@ -11,9 +11,6 @@ on:
       shouldCreateEFS:
         description: "Do you want to create EFS?"
         type: boolean
-      shouldCreatePV:
-        description: "Do you want to create Persistent Volume?"
-        type: boolean
       shouldCreateALB:
         description: "Do you want to create ALB?"
         type: boolean
@@ -151,9 +148,6 @@ jobs:
           
           echo "EFS mount targets done"
 
-      - name: Create Persistent Volumes
-        if: inputs.shouldCreatePV
-        run: |
           # Create Persistent Volume for EFS
           echo "
             apiVersion: storage.k8s.io/v1
