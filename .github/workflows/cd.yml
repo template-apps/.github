@@ -11,6 +11,9 @@ on:
       shouldCreateEFS:
         description: "Do you want to create EFS?"
         type: boolean
+      shouldCreatePV:
+        description: "Do you want to create Persistent Volume?"
+        type: boolean
       shouldCreateALB:
         description: "Do you want to create ALB?"
         type: boolean
@@ -147,10 +150,13 @@ jobs:
           done
           
           echo "EFS mount targets done"
-          
+
+      - name: Create Persistent Volumes
+        if: inputs.shouldCreatePV
+        run: |
           # Create Persistent Volume for EFS
           echo "
-            apiVersion: storage.k8s.io/v1beta1
+            apiVersion: storage.k8s.io/v1
             kind: CSIDriver
             metadata:
               name: efs.csi.aws.com
@@ -190,11 +196,11 @@ jobs:
               resources:
                 requests:
                   storage: 25Gi
-          " | kubectl apply -f -
+          " | kubectl apply -n ${{env.NAMESPACE}} -f -
 
           echo "Persistent Volume for EFS created"
 
-      - name: Create ALB
+      - name: Create ALB (External Facing)
         if: inputs.shouldCreateALB
         run: |
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
