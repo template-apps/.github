@@ -135,6 +135,8 @@ jobs:
       - name: Create ALB (External Facing)
         if: inputs.shouldCreateALB
         run: |
+          eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
+          
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
           VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
           
@@ -169,14 +171,14 @@ jobs:
             --namespace cert-manager \
             --region ${{vars.REGION}}
           
-          ## Install AWS Load Balancer Controller
-          helm repo add eks https://aws.github.io/eks-charts
-          kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
-          helm install aws-load-balancer-controller \
-            eks/aws-load-balancer-controller \
-            --namespace kube-system \
-            --set clusterName=${{vars.CLUSTER}} \
-            --set serviceAccount.create=false \
-            --set serviceAccount.name=aws-load-balancer-controller \
-            --set vpcId=$VPC_ID \
-            --set region=${{vars.REGION}}
+      - name: helm deploy
+        if: inputs.shouldCreateALB
+        uses: bitovi/github-actions-deploy-eks-helm@v1.2.4
+        with:
+          aws-region: ${{vars.REGION}}
+          cluster-name: ${{vars.CLUSTER}}
+          chart-repository: https://aws.github.io/eks-charts
+          chart-path: stable/aws-load-balancer-controller
+          namespace: kube-system
+          values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=$VPC_ID,region=${{vars.REGION}}
+          name: aws-load-balancer-controller
