@@ -174,7 +174,7 @@ jobs:
             --namespace cert-manager \
             --region ${{vars.REGION}}
           
-      - name: helm deploy
+      - name: helm deploy aws-load-balancer-controller
         if: inputs.shouldCreateALB
         uses: bitovi/github-actions-deploy-eks-helm@v1.2.4
         with:
