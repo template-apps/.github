@@ -213,7 +213,7 @@ jobs:
           aws rds create-db-instance \
             --db-instance-identifier ${{vars.CLUSTER}}-db \
             --db-instance-class db.t3.micro \
-            --db-name ${{vars.CLUSTER}}-db \
+            --db-name ${{secrets.MYSQL_DB_NAME}} \
             --db-subnet-group-name fp-${{vars.CLUSTER}}-${{vars.NAMESPACE}}-db-subnet \
             --engine mysql \
             --master-username ${{secrets.MYSQL_MASTER_USER}}  \
