@@ -185,7 +185,7 @@ jobs:
           aws-region: ${{vars.REGION}}
           cluster-name: ${{vars.CLUSTER}}
           chart-repository: https://aws.github.io/eks-charts
-          chart-path: stable/aws-load-balancer-controller
+          chart-path: eks/aws-load-balancer-controller
           namespace: kube-system
           values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=$VPC_ID,region=${{vars.REGION}}
           name: aws-load-balancer-controller
