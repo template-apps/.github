@@ -149,7 +149,6 @@ jobs:
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
           
           ACCOUNT_ID=$(aws sts get-caller-identity --query 'Account' --output text)
-          VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
           
           ## Associate OIDC provider
           eksctl utils associate-iam-oidc-provider \
