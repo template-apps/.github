@@ -65,13 +65,21 @@ jobs:
                    - namespace: kube-system
            ')
 
+      - name: Fetch VPC Identifiers
+        id: vpcIdsStep
+        run: |
+          eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
+          
+          vpcId=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
+          cidrBlock=$(aws ec2 describe-vpcs --vpc-ids $vpcId --query "Vpcs[].CidrBlock" --region ${{vars.REGION}} --output text)
+
+          echo "vpcId=$vpcId" >> $GITHUB_OUTPUT
+          echo "cidrBlock=$cidrBlock" >> $GITHUB_OUTPUT
+
       - name: Create EFS & Dependencies
         if: inputs.shouldCreateEFS
         run: |
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
-          
-          VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
-          CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{vars.REGION}} --output text)
           
           # EFS File System
           EFS_FS_ID=$(aws efs create-file-system \
@@ -108,7 +116,7 @@ jobs:
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
             --group-name eks-efs-${{vars.CLUSTER}} \
-            --vpc-id $VPC_ID \
+            --vpc-id ${{steps.vpcIdsStep.outputs.vpcId}} \
             --region ${{vars.REGION}} \
             --query 'GroupId' --output text)
           
@@ -116,7 +124,7 @@ jobs:
             --group-id $EFS_SG_ID \
             --protocol tcp \
             --port 2049 \
-            --cidr $CIDR_BLOCK
+            --cidr ${{steps.vpcIdsStep.outputs.cidrBlock}}
           
           echo "Security group created"
           
@@ -187,7 +195,7 @@ jobs:
           chart-repository: https://aws.github.io/eks-charts
           chart-path: eks/aws-load-balancer-controller
           namespace: kube-system
-          values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=$VPC_ID,region=${{vars.REGION}}
+          values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=${{steps.vpcIdsStep.outputs.vpcId}},region=${{vars.REGION}}
           name: aws-load-balancer-controller
 
       - name: Create RDS (MySQL)
@@ -241,13 +249,10 @@ jobs:
               --query "DBInstances[].VpcSecurityGroups[].VpcSecurityGroupId" \
               --output text)
           
-          VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
-          CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{vars.REGION}} --output text)
-          
           ## Accept MySQL traffic
           aws ec2 authorize-security-group-ingress \
             --group-id $RDS_SG \
-            --cidr $CIDR_BLOCK \
+            --cidr ${{steps.vpcIdsStep.outputs.cidrBlock}} \
             --port 3306 \
             --protocol tcp \
             --region ${{vars.REGION}}
