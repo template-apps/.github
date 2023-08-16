@@ -14,6 +14,9 @@ on:
       shouldCreateALB:
         description: "Do you want to create ALB?"
         type: boolean
+      shouldCreateRDS:
+        description: "Do you want to create RDS?"
+        type: boolean
 
 jobs:
   create-global-infrastructure:
@@ -180,5 +183,72 @@ jobs:
           chart-repository: https://aws.github.io/eks-charts
           chart-path: stable/aws-load-balancer-controller
           namespace: kube-system
-          values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=$VPC_ID,region=${{vars.REGION}}
+          values: |
+            clusterName=${{vars.CLUSTER}},
+            serviceAccount.create=false,
+            serviceAccount.name=aws-load-balancer-controller,
+            vpcId=$VPC_ID,
+            region=${{vars.REGION}}
           name: aws-load-balancer-controller
+
+      - name: Create RDS (MySQL)
+        if: inputs.shouldCreateRDS
+        run: |
+          eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
+          
+          ## Get VPC's private subnets
+          FARGATE_PRIVATE_SUBNETS=$(aws eks describe-fargate-profile \
+            --fargate-profile-name fp-${{vars.CLUSTER}}-${{vars.NAMESPACE}}  \
+            --cluster-name ${{vars.CLUSTER}} \
+            --region ${{vars.REGION}} \
+            --query "fargateProfile.[subnets]" --output text | awk -v OFS="," '{for(i=1;i<=NF;i++)if($i~/subnet/)$i="\"" $i "\"";$1=$1}1')
+          
+          ## Create a DB subnet group
+          aws rds create-db-subnet-group \
+            --db-subnet-group-name fp-${{vars.CLUSTER}}-${{vars.NAMESPACE}}-db-subnet \
+            --subnet-ids "[$FARGATE_PRIVATE_SUBNETS]" \
+            --db-subnet-group-description "Subnet group for MySQL RDS" \
+            --region ${{vars.REGION}}
+          
+          ## Create database instance
+          aws rds create-db-instance \
+            --db-instance-identifier ${{vars.CLUSTER}}-db \
+            --db-instance-class db.t3.micro \
+            --db-name ${{vars.CLUSTER}}-db \
+            --db-subnet-group-name fp-${{vars.CLUSTER}}-${{vars.NAMESPACE}}-db-subnet \
+            --engine mysql \
+            --master-username ${{secrets.MYSQL_MASTER_USER}}  \
+            --master-user-password ${{secrets.MYSQL_MASTER_PASSWORD}} \
+            --allocated-storage 20 \
+            --no-publicly-accessible \
+            --region ${{vars.REGION}}
+          
+          # Wait for RDS to be available it can take upto 5 mins.
+          while true; do
+            status=$(aws rds describe-db-instances --db-instance-identifier "${{vars.CLUSTER}}-db" --query "DBInstances[0].DBInstanceStatus" --output text --region "${{vars.REGION}}")
+            if [[ "$status" == "available" ]]; then
+              echo "RDS instance is now available."
+              break
+            else
+              echo "Waiting for RDS instance to become available (current status: $status)..."
+              sleep 30
+            fi
+          done
+
+          ## Get the security group attached to the RDS instance
+          RDS_SG=$(aws rds describe-db-instances \
+              --db-instance-identifier ${{vars.CLUSTER}}-db \
+              --region ${{vars.REGION}} \
+              --query "DBInstances[].VpcSecurityGroups[].VpcSecurityGroupId" \
+              --output text)
+          
+          VPC_ID=$(aws eks describe-cluster --name ${{vars.CLUSTER}} --query "cluster.resourcesVpcConfig.vpcId" --region ${{vars.REGION}} --output text)
+          CIDR_BLOCK=$(aws ec2 describe-vpcs --vpc-ids $VPC_ID --query "Vpcs[].CidrBlock" --region ${{vars.REGION}} --output text)
+          
+          ## Accept MySQL traffic
+          aws ec2 authorize-security-group-ingress \
+            --group-id $RDS_SG \
+            --cidr $CIDR_BLOCK \
+            --port 3306 \
+            --protocol tcp \
+            --region ${{vars.REGION}}
