@@ -149,13 +149,17 @@ jobs:
             --cluster ${{vars.CLUSTER}} \
             --approve
           
-          ## Download the IAM policy document
-          curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.6.0/docs/install/iam_policy.json -o iam-policy.json
-          
-          ## Create an IAM policy
-          aws iam create-policy \
-            --policy-name AWSLoadBalancerControllerIAMPolicy \
-            --policy-document file://iam-policy.json
+          POLICY_NAME="AWSLoadBalancerControllerIAMPolicy"
+      
+          # Check if the policy already exists
+          if ! aws iam get-policy --policy-arn "arn:aws:iam::$ACCOUNT_ID:policy/$POLICY_NAME" >/dev/null 2>&1; then
+            ## Download the IAM policy document
+            curl -S https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.6.0/docs/install/iam_policy.json -o iam-policy.json
+            aws iam create-policy --policy-name $POLICY_NAME --policy-document file://iam-policy.json
+            echo "IAM Policy created: $policy_name"
+          else
+            echo "IAM Policy already exists: $POLICY_NAME"
+          fi
           
           ## Create a service account
           eksctl create iamserviceaccount \
