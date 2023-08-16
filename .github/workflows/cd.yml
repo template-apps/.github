@@ -12,7 +12,7 @@ on:
         description: "Do you want to create EFS?"
         type: boolean
       shouldCreateALB:
-        description: "Do you want to create ALB?"
+        description: "Do you want to create ALB Controller?"
         type: boolean
       shouldCreateRDS:
         description: "Do you want to create RDS?"
@@ -135,7 +135,7 @@ jobs:
           
           echo "EFS mount targets done"
 
-      - name: Create ALB (External Facing)
+      - name: Create ALB Controller (External Facing)
         if: inputs.shouldCreateALB
         run: |
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
