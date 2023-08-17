@@ -20,6 +20,7 @@ minikube config set memory 6144
 minikube delete
 minikube start
 
+kubectl config use-context minikube
 eval $(minikube -p minikube docker-env)
 docker run -d -p 5123:5000 --name local-registry registry:2
 ```
@@ -29,6 +30,7 @@ docker run -d -p 5123:5000 --name local-registry registry:2
 #!/bin/bash
 
 # Set environment variables
+kubectl config use-context minikube
 eval $(minikube -p minikube docker-env)
 export REGISTRY=localhost:5123
 export NAMESPACE=apps-template
@@ -61,6 +63,8 @@ echo "Script completed successfully."
 ## Deployment
 ```
 #!/bin/bash
+
+kubectl config use-context minikube
 
 # Set environment variables
 export REGISTRY=localhost:5123
