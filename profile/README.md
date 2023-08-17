@@ -106,3 +106,4 @@ helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnami
   Then create GitHub secret `CERTIFICATE_ARN` with the ARN of that certificate. Also add `DOMAIN` variable e.g. `example.com`.  
   CMS and API and APP subdomains will be used when ingress is created. Make sure DNS points to those LBs as cname.
 * NOTE: Currently there is single RDS instance that's shared by all the services. Creating the database is still manual.
+* NOTE: Don't forget to create ECR repositories for images to be pushed.
