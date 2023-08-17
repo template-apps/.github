@@ -11,8 +11,7 @@
 * [For Intel Chipset Only] Kubernetes cli tools: `brew install kubernetes-cli`
 * Minikube: `brew install minikube`
 * Helm: `brew install helm`
-* Java 20
-* TODO: AWS cli, Creating ECR repository, AWS Access Key
+* Java 20 (Preferably Amazon Corretto)
 
 ## Setup Minikube cluster with docker registry
 ```
@@ -49,6 +48,13 @@ echo "Building and pushing user image..."
     ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
 )
 
+# Build and push api image
+echo "Building and pushing api image..."
+(
+    cd api || exit
+    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
+)
+
 echo "Script completed successfully."
 ```
 
@@ -71,79 +77,32 @@ helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnami
     --set image.repository="$REGISTRY/$NAMESPACE-user" \
     --set image.tag="$VERSION" \
     --set 'imagePullSecrets=' \
+    --set autoscaling.enabled="true" \
     --set app.db.local="true" \
     --set app.db.host="user-db" \
     --set app.db.password="password" \
     --namespace "$NAMESPACE")
+
+(cd api && \
+    helm upgrade --install --create-namespace api infrastructure/helm \
+    -f infrastructure/helm/values.yaml \
+    --set image.repository="$REGISTRY/$NAMESPACE-api" \
+    --set image.tag="$VERSION" \
+    --set 'imagePullSecrets=' \
+    --set autoscaling.enabled="true" \
+    --set ingress.enabled="false" \
+    --set 'ingress.certificateARN=' \
+    --set 'ingress.host=' \
+    --namespace "$NAMESPACE")
 ```
 
 # Production Deployment
-## TODO
-* GitHub Actions (TBA)
-* EKS, EKS Role, ECR Repositories (TBA)
-
-## Building
-```
-#!/bin/bash
-
-# Set environment variables
-export REGISTRY=881387567440.dkr.ecr.us-east-1.amazonaws.com
-export NAMESPACE=apps-template
-export VERSION=latest
-export REGION=us-east-1
-
-# Log in to Docker registry
-echo "Logging in to Docker registry..."
-aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
-
-# Build and push custom-jres image
-echo "Building and pushing custom-jres image..."
-(
-    cd custom-jres/custom-jre-20 || exit
-    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
-)
-
-# Build and push user image
-echo "Building and pushing user image..."
-(
-    cd user || exit
-    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
-)
-
-echo "Script completed successfully."
-```
-
-## Deployment
-```
-#!/bin/bash
-
-# Set environment variables
-export REGISTRY=881387567440.dkr.ecr.us-east-1.amazonaws.com
-export NAMESPACE=apps-template
-export VERSION=latest
-export REGION=us-east-1
-
-# Delete and recreate Kubernetes secret for ECR image pull
-kubectl delete secret regcred --namespace="$NAMESPACE"
-kubectl create secret docker-registry regcred \
-    --docker-server="$REGISTRY" \
-    --docker-username=AWS \
-    --docker-password="$(aws ecr get-login-password --region "$REGION")" \
-    --docker-email=sachin@joincypher.com \
-    --namespace="$NAMESPACE"
-
-# Upgrade and install Helm charts
-helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
-    -n "$NAMESPACE"
-
-(cd user && \
-    helm upgrade --install --create-namespace user infrastructure/helm \
-    -f infrastructure/helm/values.yaml \
-    --set image.repository="$REGISTRY/$NAMESPACE-user" \
-    --set image.tag="$VERSION" \
-    --set 'imagePullSecrets[0].name=regcred' \
-    --set app.db.local="false" \
-    --set app.db.host="RDS Host TBA" \
-    --set app.db.password="RDS DB Password TBA" \
-    --namespace "$NAMESPACE")
-```
+* All the services are deployed using GitHub Actions. `.github` repository is the parent that creates foundational infrastructure.
+* Manually create AWS account, create admin group and add user. Generate access key. Add `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` as GitHub Org level secret.
+* When RDS is created it will use the Master username/password as set in `MYSQL_MASTER_PASSWORD`, `MYSQL_MASTER_USER` GitHub Org level secrets.   
+* When EKS cluster will be created it will use `CLUSTER`, `NAMESPACE` GitHub org level variables.
+* Add `REGION` GitHub Org level variable to point to your AWS account region e.g. `us-east-1`.
+* Create domain (either in Route53 or external), then create Certificate in ACM to use that domain.   
+  Then create GitHub secret `CERTIFICATE_ARN` with the ARN of that certificate. Also add `DOMAIN` variable e.g. `example.com`.  
+  CMS and API and APP subdomains will be used when ingress is created. Make sure DNS points to those LBs as cname.
+* NOTE: Currently there is single RDS instance that's shared by all the services. Creating the database is still manual.
