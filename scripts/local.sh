@@ -46,6 +46,25 @@ deploy_helm_chart() {
     )
 }
 
+# Deploy Helm chart for CMS
+deploy_cms_helm_chart() {
+    echo "📦 Deploying CMS Helm chart..."
+    (
+        cd cms || exit
+        helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
+            -n "$NAMESPACE"
+        helm upgrade --install --create-namespace cms-ingress infrastructure/helm \
+            -f "infrastructure/helm/values.yaml" \
+            --set ingress.enabled="false" \
+            --set 'ingress.certificateARN=' \
+            --set 'ingress.host=' \
+            --set volume.enabled="false" \
+            --set "volume.efsId=' \
+            --set 'volume.efsAP=' \
+            --namespace "$NAMESPACE"
+    )
+}
+
 service="$1"
 operation="$2"
 
@@ -81,8 +100,7 @@ if [[ "$operation" == "deploy" || "$operation" == "all" ]]; then
         case "$service" in
             "cms")
             echo "📦 Deploying $service"
-              helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
-                  -n "$NAMESPACE"
+              deploy_cms_helm_chart
                 ;;
             "user")
                 deploy_helm_chart "$service" \

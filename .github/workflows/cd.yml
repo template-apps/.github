@@ -5,17 +5,17 @@ on:
     branches:
       - main
     inputs:
-      shouldCreateEKS:
-        description: "Do you want to create EKS cluster?"
+      provisionEKS:
+        description: "Provision EKS Cluster?"
         type: boolean
-      shouldCreateEFS:
-        description: "Do you want to create EFS?"
+      provisionEFS:
+        description: "Provision EFS?"
         type: boolean
-      shouldCreateALB:
-        description: "Do you want to create ALB Controller?"
+      provisionALBController:
+        description: "Provision ALB Controller?"
         type: boolean
-      shouldCreateRDS:
-        description: "Do you want to create RDS?"
+      provisionRDS:
+        description: "Provision RDS?"
         type: boolean
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
           sudo mv /tmp/eksctl /usr/local/bin
 
       - name: Create EKS Cluster
-        if: inputs.shouldCreateEKS
+        if: inputs.provisionEKS
         run: |
           eksctl create cluster -f <(echo '
              apiVersion: eksctl.io/v1alpha5
@@ -66,7 +66,7 @@ jobs:
            ')
 
       - name: Fetch VPC Identifiers
-        id: vpcIdsStep
+        id: idFetcher
         run: |
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
           
@@ -77,7 +77,7 @@ jobs:
           echo "cidrBlock=$cidrBlock" >> $GITHUB_OUTPUT
 
       - name: Create EFS & Dependencies
-        if: inputs.shouldCreateEFS
+        if: inputs.provisionEFS
         run: |
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
           
@@ -116,7 +116,7 @@ jobs:
           EFS_SG_ID=$(aws ec2 create-security-group \
             --description "Security Group for File System for Inbound traffic" \
             --group-name eks-efs-${{vars.CLUSTER}} \
-            --vpc-id ${{steps.vpcIdsStep.outputs.vpcId}} \
+            --vpc-id ${{steps.idFetcher.outputs.vpcId}} \
             --region ${{vars.REGION}} \
             --query 'GroupId' --output text)
           
@@ -124,7 +124,7 @@ jobs:
             --group-id $EFS_SG_ID \
             --protocol tcp \
             --port 2049 \
-            --cidr ${{steps.vpcIdsStep.outputs.cidrBlock}}
+            --cidr ${{steps.idFetcher.outputs.cidrBlock}}
           
           echo "Security group created"
           
@@ -144,7 +144,7 @@ jobs:
           echo "EFS mount targets done"
 
       - name: Create ALB Controller (External Facing)
-        if: inputs.shouldCreateALB
+        if: inputs.provisionALBController
         run: |
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
           
@@ -186,7 +186,7 @@ jobs:
             --region ${{vars.REGION}}
           
       - name: helm deploy aws-load-balancer-controller
-        if: inputs.shouldCreateALB
+        if: inputs.provisionALBController
         uses: bitovi/github-actions-deploy-eks-helm@v1.2.4
         with:
           aws-region: ${{vars.REGION}}
@@ -194,11 +194,11 @@ jobs:
           chart-repository: https://aws.github.io/eks-charts
           chart-path: eks/aws-load-balancer-controller
           namespace: kube-system
-          values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=${{steps.vpcIdsStep.outputs.vpcId}},region=${{vars.REGION}}
+          values: clusterName=${{vars.CLUSTER}},serviceAccount.create=false,serviceAccount.name=aws-load-balancer-controller,vpcId=${{steps.idFetcher.outputs.vpcId}},region=${{vars.REGION}}
           name: aws-load-balancer-controller
 
       - name: Create RDS (MySQL)
-        if: inputs.shouldCreateRDS
+        if: inputs.provisionRDS
         run: |
           eksctl utils write-kubeconfig --cluster ${{vars.CLUSTER}} --region ${{vars.REGION}}
           
@@ -251,7 +251,7 @@ jobs:
           ## Accept MySQL traffic
           aws ec2 authorize-security-group-ingress \
             --group-id $RDS_SG \
-            --cidr ${{steps.vpcIdsStep.outputs.cidrBlock}} \
+            --cidr ${{steps.idFetcher.outputs.cidrBlock}} \
             --port 3306 \
             --protocol tcp \
             --region ${{vars.REGION}}
