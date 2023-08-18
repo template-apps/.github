@@ -11,7 +11,7 @@ fi
 REGISTRY=localhost:5123
 NAMESPACE=apps-template
 VERSION=latest
-eval $(minikube -p minikube docker-env)
+eval "$(minikube -p minikube docker-env)"
 
 # Set up Kubernetes context
 kubectl config use-context minikube
@@ -48,11 +48,14 @@ deploy_helm_chart() {
 
 # Deploy Helm chart for CMS
 deploy_cms_helm_chart() {
-    echo "📦 Deploying CMS Helm chart..."
+    echo "📦 Deploying CMS Helm charts..."
     (
         cd cms || exit
         helm upgrade --install --create-namespace cms-bitnami oci://registry-1.docker.io/bitnamicharts/wordpress \
-            --set nameOverride="cms" \
+            --set fullnameOverride="cms" \
+            --set wordpressUsername="admin" \
+            --set wordpressPassword="password" \
+            --set mariadb.auth.rootPassword="password" \
             -n "$NAMESPACE"
         helm upgrade --install --create-namespace cms infrastructure/helm \
             -f "infrastructure/helm/values.yaml" \
@@ -100,7 +103,6 @@ if [[ "$operation" == "deploy" || "$operation" == "all" ]]; then
     for service in "${services[@]}"; do
         case "$service" in
             "cms")
-            echo "📦 Deploying $service"
               deploy_cms_helm_chart
                 ;;
             "user")
@@ -114,7 +116,7 @@ if [[ "$operation" == "deploy" || "$operation" == "all" ]]; then
                 deploy_helm_chart "$service" \
                     --set autoscaling.enabled="true" \
                     --set ingress.enabled="false" \
-                    --set "ingress.certificateARN=' \
+                    --set 'ingress.certificateARN=' \
                     --set 'ingress.host='
                 ;;
         esac
