@@ -51,15 +51,16 @@ deploy_cms_helm_chart() {
     echo "📦 Deploying CMS Helm chart..."
     (
         cd cms || exit
-        helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
+        helm upgrade --install --create-namespace cms-bitnami oci://registry-1.docker.io/bitnamicharts/wordpress \
+            --set nameOverride="cms" \
             -n "$NAMESPACE"
-        helm upgrade --install --create-namespace cms-ingress infrastructure/helm \
+        helm upgrade --install --create-namespace cms infrastructure/helm \
             -f "infrastructure/helm/values.yaml" \
             --set ingress.enabled="false" \
             --set 'ingress.certificateARN=' \
             --set 'ingress.host=' \
             --set volume.enabled="false" \
-            --set "volume.efsId=' \
+            --set 'volume.efsId=' \
             --set 'volume.efsAP=' \
             --namespace "$NAMESPACE"
     )
@@ -113,7 +114,7 @@ if [[ "$operation" == "deploy" || "$operation" == "all" ]]; then
                 deploy_helm_chart "$service" \
                     --set autoscaling.enabled="true" \
                     --set ingress.enabled="false" \
-                    --set 'ingress.certificateARN=' \
+                    --set "ingress.certificateARN=' \
                     --set 'ingress.host='
                 ;;
         esac
