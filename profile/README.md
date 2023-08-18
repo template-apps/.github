@@ -25,79 +25,21 @@ eval $(minikube -p minikube docker-env)
 docker run -d -p 5123:5000 --name local-registry registry:2
 ```
 
-## Building
+## Build and Deployment
+`local.sh` takes care of build and deployment on local machine
+Examples:
 ```
-#!/bin/bash
+# Build and Deploy everything!
+./.github/scripts/local.sh all all
 
-# Set environment variables
-kubectl config use-context minikube
-eval $(minikube -p minikube docker-env)
-export REGISTRY=localhost:5123
-export NAMESPACE=apps-template
-export VERSION=latest
+# Building user service
+./.github/scripts/local.sh user build
 
-# Build and push custom-jres image
-echo "Building and pushing custom-jres image..."
-(
-    cd custom-jres/custom-jre-20 || exit
-    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
-)
+# Deploying user service
+./.github/scripts/local.sh user deploy
 
-# Build and push user image
-echo "Building and pushing user image..."
-(
-    cd user || exit
-    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
-)
-
-# Build and push api image
-echo "Building and pushing api image..."
-(
-    cd api || exit
-    ./rebuildAndPush.sh -r "$REGISTRY" -n "$NAMESPACE" -v "$VERSION"
-)
-
-echo "Script completed successfully."
-```
-
-## Deployment
-```
-#!/bin/bash
-
-kubectl config use-context minikube
-
-# Set environment variables
-export REGISTRY=localhost:5123
-export NAMESPACE=apps-template
-export VERSION=latest
-
-# Upgrade and install Helm charts
-helm upgrade --install --create-namespace cms oci://registry-1.docker.io/bitnamicharts/wordpress \
-    -n "$NAMESPACE"
-
-(cd user && \
-    helm upgrade --install --create-namespace user infrastructure/helm \
-    -f infrastructure/helm/values.yaml \
-    --set image.repository="$REGISTRY/$NAMESPACE-user" \
-    --set image.tag="$VERSION" \
-    --set 'imagePullSecrets=' \
-    --set autoscaling.enabled="true" \
-    --set app.db.local="true" \
-    --set app.db.host="user-db" \
-    --set app.db.password="password" \
-    --namespace "$NAMESPACE")
-
-(cd api && \
-    helm upgrade --install --create-namespace api infrastructure/helm \
-    -f infrastructure/helm/values.yaml \
-    --set image.repository="$REGISTRY/$NAMESPACE-api" \
-    --set image.tag="$VERSION" \
-    --set 'imagePullSecrets=' \
-    --set autoscaling.enabled="true" \
-    --set ingress.enabled="false" \
-    --set 'ingress.certificateARN=' \
-    --set 'ingress.host=' \
-    --namespace "$NAMESPACE")
+# Building & Deploying user service
+./.github/scripts/local.sh user all
 ```
 
 # Production Deployment
