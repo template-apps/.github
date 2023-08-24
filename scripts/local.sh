@@ -62,6 +62,8 @@ deploy_cms_helm_chart() {
             --set ingress.enabled="false" \
             --set 'ingress.certificateARN=' \
             --set 'ingress.host=' \
+            --set 'ingress.redirectToHostEnabled="false"' \
+            --set 'ingress.domain=' \
             --set volume.enabled="false" \
             --set 'volume.efsId=' \
             --set 'volume.efsAP=' \
