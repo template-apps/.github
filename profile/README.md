@@ -12,7 +12,7 @@
 * Minikube: `brew install minikube`
 * Helm: `brew install helm`
 * Java 20 (Preferably Amazon Corretto)
-* Install node (> 10.13) (https://nodejs.org/en)
+* [Node](https://nodejs.org/en) 18 or above
 
 ## Setup Minikube cluster with docker registry
 ```

@@ -77,9 +77,9 @@ operation="$2"
 # Determine which services to operate on
 case "$service" in
     "all")
-        services=("custom-jres/custom-jre-20" "cms" "user" "api")
+        services=("custom-jres/custom-jre-20" "cms" "user" "api" "web")
         ;;
-    "custom-jres/custom-jre-20" | "cms" | "user" | "api"  )
+    "custom-jres/custom-jre-20" | "cms" | "user" | "api" | "web" )
         services=("$service")
         ;;
     *)
@@ -115,6 +115,13 @@ if [[ "$operation" == "deploy" || "$operation" == "all" ]]; then
                     --set app.db.password="password"
                 ;;
             "api")
+                deploy_helm_chart "$service" \
+                    --set autoscaling.enabled="true" \
+                    --set ingress.enabled="false" \
+                    --set 'ingress.certificateARN=' \
+                    --set 'ingress.host='
+                ;;
+            "web")
                 deploy_helm_chart "$service" \
                     --set autoscaling.enabled="true" \
                     --set ingress.enabled="false" \
