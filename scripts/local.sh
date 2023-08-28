@@ -51,8 +51,7 @@ deploy_cms_helm_chart() {
     echo "📦 Deploying CMS Helm charts..."
     (
         cd cms || exit
-        helm upgrade --install --create-namespace cms-bitnami oci://registry-1.docker.io/bitnamicharts/wordpress \
-            --set fullnameOverride="cms" \
+        helm upgrade --install --create-namespace cms-wordpress oci://registry-1.docker.io/bitnamicharts/wordpress \
             --set wordpressUsername="admin" \
             --set wordpressPassword="password" \
             --set mariadb.auth.rootPassword="password" \
