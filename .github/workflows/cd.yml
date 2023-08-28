@@ -143,6 +143,23 @@ jobs:
           
           echo "EFS mount targets done"
 
+          echo "
+          apiVersion: storage.k8s.io/v1
+          kind: CSIDriver
+          metadata:
+            name: efs.csi.aws.com
+          spec:
+            attachRequired: false
+          ---
+          kind: StorageClass
+          apiVersion: storage.k8s.io/v1
+          metadata:
+            name: efs-sc
+          provisioner: efs.csi.aws.com
+          " | kubectl apply -n ${{vars.NAMESPACE}} -f -
+          
+          echo "EFS CSI driver and Storage class created"
+
       - name: Create ALB Controller (External Facing)
         if: inputs.provisionALBController
         run: |
